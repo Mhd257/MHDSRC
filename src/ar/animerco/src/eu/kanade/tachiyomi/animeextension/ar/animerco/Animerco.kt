@@ -116,38 +116,35 @@ class Animerco : ConfigurableAnimeSource, ParsedAnimeHttpSource() {
     override fun episodeListSelector() = "ul.chapters-list li a:has(h3)"
 
     override fun episodeListParse(response: Response): List<SEpisode> {
-        val document = response.asJsoup()
-        if (document.location().contains("/movies/")) {
-            return listOf(
-                SEpisode.create().apply {
-                    setUrlWithoutDomain(document.location())
-                    episode_number = 1F
-                    name = "Movie"
-                },
-            )
-        }
+    val document = response.asJsoup()
 
-        return document.select(episodeListSelector()).flatMap { el ->
-            val doc = client.newCall(GET(el.attr("abs:href"), headers)).execute()
-                .asJsoup()
-            val seasonName = doc.selectFirst("div.media-title h1")!!.text()
-            val seasonNum = seasonName.substringAfterLast(" ").toIntOrNull() ?: 1
-            doc.select(episodeListSelector()).map {
-                episodeFromElement(it, seasonName, seasonNum)
-            }.reversed()
-        }.reversed()
+    // Step 1: Find the "قائمة الحلقات" link
+    val episodeListLink = document.selectFirst("a:contains(قائمة الحلقات)")?.attr("abs:href")
+
+    if (episodeListLink != null) {
+        println("Found episode list page: $episodeListLink")
+
+        // Step 2: Load the episode list page
+        val episodeDoc = client.newCall(GET(episodeListLink, headers)).execute().asJsoup()
+
+        // Step 3: Extract episodes from the episode list page
+        return episodeDoc.select(episodeListSelector()).map { el ->
+            episodeFromElement(el)
+        }.reversed() // Reverse to get correct order
     }
 
-    private fun episodeFromElement(element: Element, seasonName: String, seasonNum: Int) = SEpisode.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        val epText = element.selectFirst("h3")!!.ownText()
-        name = "$seasonName: " + epText
-        val epNum = epText.filter(Char::isDigit)
-        // good luck trying to track this xD
-        episode_number = "$seasonNum.${epNum.padStart(3, '0')}".toFloatOrNull() ?: 1F
-    }
+    // If no episode list link, return an empty list
+    return emptyList()
+}
 
-    override fun episodeFromElement(element: Element) = throw UnsupportedOperationException()
+// Function to create an episode object
+private fun episodeFromElement(element: Element): SEpisode {
+    return SEpisode.create().apply {
+        setUrlWithoutDomain(element.attr("href")) // Get the episode URL
+        name = element.selectFirst("h3")?.ownText() ?: "Unknown Episode" // Get episode title
+        episode_number = name.filter { it.isDigit() }.toFloatOrNull() ?: 1F // Extract episode number
+    }
+}
 
     // ============================ Video Links =============================
     override fun videoListParse(response: Response): List<Video> {
