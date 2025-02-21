@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           ref: main
-          token: ${{ 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}}
+          token: ${{mhd,PAT}}
 
       - name: Find lib changes
         id: modified-libs
